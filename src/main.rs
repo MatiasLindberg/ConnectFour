@@ -10,6 +10,7 @@ enum Owned {
     NOBODY,
 }
 
+#[derive(PartialEq)]
 struct Token {
     pos: (f32, f32),
     owned: Owned,
@@ -17,6 +18,7 @@ struct Token {
 }
 
 fn set_up_game(tokens: &mut Vec<Vec<Token>>) {
+    tokens.clear();
     for j in 0..SIZE_X {
         let mut tmp_tok: Vec<Token> = Vec::new();
         for i in 0..SIZE_Y {
@@ -50,9 +52,40 @@ fn drop_token(token_row: &mut Vec<Token>, player: bool) -> bool {
 }
 
 fn check_victory(tokens: &Vec<Vec<Token>>, owner: Owned) -> bool {
-    for column in tokens {
-        for tok in column {
-            if tok.owned == owner {}
+    for y in 0..SIZE_Y {
+        for x in 0..SIZE_X {
+            if tokens[x][y].owned == owner {
+                if x <= SIZE_X - 4
+                    && tokens[x + 1][y].owned == owner
+                    && tokens[x + 2][y].owned == owner
+                    && tokens[x + 3][y].owned == owner
+                {
+                    return true;
+                }
+                if y <= SIZE_Y - 4
+                    && tokens[x][y + 1].owned == owner
+                    && tokens[x][y + 2].owned == owner
+                    && tokens[x][y + 3].owned == owner
+                {
+                    return true;
+                }
+                if y <= SIZE_Y - 4
+                    && x <= SIZE_X - 4
+                    && tokens[x + 1][y + 1].owned == owner
+                    && tokens[x + 2][y + 2].owned == owner
+                    && tokens[x + 3][y + 3].owned == owner
+                {
+                    return true;
+                }
+                if y <= SIZE_Y - 4
+                    && x >= SIZE_X - 4
+                    && tokens[x - 1][y + 1].owned == owner
+                    && tokens[x - 2][y + 2].owned == owner
+                    && tokens[x - 3][y + 3].owned == owner
+                {
+                    return true;
+                }
+            }
         }
     }
     false
@@ -61,26 +94,53 @@ fn check_victory(tokens: &Vec<Vec<Token>>, owner: Owned) -> bool {
 #[macroquad::main("MyGame")]
 async fn main() {
     let t: std::time::SystemTime = std::time::SystemTime::now();
+    let mut wins: (u32, u32) = (0, 0);
+    let mut ended: bool = false;
     let mut tokens: Vec<Vec<Token>> = Vec::new();
     let mut drop_pos: usize = 3;
     set_up_game(&mut tokens);
     request_new_screen_size(760.0, 760.0);
 
     loop {
-        rand::srand(t.elapsed().map(|d| d.as_micros()).unwrap_or(0) as u64);
         if is_key_pressed(KeyCode::Escape) {
             println!("Exiting game");
             return;
-        } else if is_key_pressed(KeyCode::Enter) {
-            if drop_token(&mut tokens[drop_pos], true) {
-                while !drop_token(&mut tokens[rand::gen_range(0, SIZE_X)], false) {}
-            } else {
-                println!("Try something else!");
+        } else if is_key_pressed(KeyCode::Space) {
+            println!(
+                "Player has won {} games and AI has won {} games",
+                wins.0, wins.1
+            );
+        }
+        if ended {
+            if is_key_pressed(KeyCode::Backspace) {
+                println!("Starting new game!");
+                set_up_game(&mut tokens);
+                ended = false;
             }
-        } else if is_key_pressed(KeyCode::Left) {
-            drop_pos = (drop_pos + SIZE_X - 1) % SIZE_X;
-        } else if is_key_pressed(KeyCode::Right) {
-            drop_pos = (drop_pos + SIZE_X + 1) % SIZE_X;
+        } else {
+            rand::srand(t.elapsed().map(|d| d.as_micros()).unwrap_or(0) as u64);
+            if is_key_pressed(KeyCode::Enter) {
+                if drop_token(&mut tokens[drop_pos], true) {
+                    if check_victory(&tokens, Owned::PLAYER) {
+                        println!("You won!");
+                        wins.0 += 1;
+                        ended = true;
+                    } else {
+                        while !drop_token(&mut tokens[rand::gen_range(0, SIZE_X)], false) {}
+                        if check_victory(&tokens, Owned::AI) {
+                            println!("AI won!");
+                            wins.1 += 1;
+                            ended = true;
+                        }
+                    }
+                } else {
+                    println!("Try something else!");
+                }
+            } else if is_key_pressed(KeyCode::Left) {
+                drop_pos = (drop_pos + SIZE_X - 1) % SIZE_X;
+            } else if is_key_pressed(KeyCode::Right) {
+                drop_pos = (drop_pos + SIZE_X + 1) % SIZE_X;
+            }
         }
 
         clear_background(BLACK);
