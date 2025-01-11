@@ -2,15 +2,16 @@ use macroquad::prelude::*;
 
 const SIZE_Y: usize = 6;
 const SIZE_X: usize = 7;
+const AI_DEPTH: usize = 6;
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Clone)]
 enum Owned {
     PLAYER,
     AI,
     NOBODY,
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Clone)]
 struct Token {
     pos: (f32, f32),
     owned: Owned,
@@ -51,34 +52,46 @@ fn drop_token(token_row: &mut Vec<Token>, player: bool) -> bool {
     true
 }
 
+fn drop_back(token_row: &mut Vec<Token>) {
+    let mut pos: usize = 0;
+    while token_row[pos].owned == Owned::NOBODY {
+        pos += 1;
+    }
+    token_row[pos].owned = Owned::NOBODY;
+    token_row[pos].color = BLACK;
+}
+
 fn check_victory(tokens: &Vec<Vec<Token>>, owner: Owned) -> bool {
     for y in 0..SIZE_Y {
         for x in 0..SIZE_X {
             if tokens[x][y].owned == owner {
-                if x <= SIZE_X - 4
+                if x + 3 < SIZE_X
                     && tokens[x + 1][y].owned == owner
                     && tokens[x + 2][y].owned == owner
                     && tokens[x + 3][y].owned == owner
                 {
                     return true;
                 }
-                if y <= SIZE_Y - 4
+
+                if y + 3 < SIZE_Y
                     && tokens[x][y + 1].owned == owner
                     && tokens[x][y + 2].owned == owner
                     && tokens[x][y + 3].owned == owner
                 {
                     return true;
                 }
-                if y <= SIZE_Y - 4
-                    && x <= SIZE_X - 4
+
+                if x + 3 < SIZE_X
+                    && y + 3 < SIZE_Y
                     && tokens[x + 1][y + 1].owned == owner
                     && tokens[x + 2][y + 2].owned == owner
                     && tokens[x + 3][y + 3].owned == owner
                 {
                     return true;
                 }
-                if y <= SIZE_Y - 4
-                    && x >= SIZE_X - 4
+
+                if x >= 3
+                    && y + 3 < SIZE_Y
                     && tokens[x - 1][y + 1].owned == owner
                     && tokens[x - 2][y + 2].owned == owner
                     && tokens[x - 3][y + 3].owned == owner
@@ -89,6 +102,85 @@ fn check_victory(tokens: &Vec<Vec<Token>>, owner: Owned) -> bool {
         }
     }
     false
+}
+
+fn possible_drops(tokens: &Vec<Vec<Token>>) -> Vec<usize> {
+    (0..SIZE_X)
+        .filter(|&col| tokens[col][0].owned == Owned::NOBODY)
+        .collect()
+}
+
+fn eval(tokens: &Vec<Vec<Token>>) -> i32 {
+    if check_victory(tokens, Owned::AI) {
+        100
+    } else if check_victory(tokens, Owned::PLAYER) {
+        -100
+    } else if possible_drops(tokens).is_empty() {
+        -10
+    } else {
+        0
+    }
+}
+
+fn minmax(tokens: &mut Vec<Vec<Token>>, depth: usize, alpha: i32, beta: i32, ai: bool) -> i32 {
+    match eval(tokens) {
+        100 => return 100,
+        -100 => return -100,
+        -10 => return -10,
+        _ => {
+            if depth >= AI_DEPTH {
+                return 0;
+            }
+        }
+    }
+
+    let mut alpha: i32 = alpha;
+    let mut beta: i32 = beta;
+
+    if ai {
+        let mut max_eval = i32::MIN;
+        for col in possible_drops(tokens) {
+            drop_token(&mut tokens[col], false);
+            let eval = minmax(tokens, depth + 1, alpha, beta, false);
+            drop_back(&mut tokens[col]);
+            max_eval = std::cmp::max(max_eval, eval);
+            alpha = std::cmp::max(alpha, eval);
+            if beta <= alpha {
+                break;
+            }
+        }
+        max_eval
+    } else {
+        let mut min_eval = i32::MAX;
+        for col in possible_drops(tokens) {
+            drop_token(&mut tokens[col], true);
+            let eval = minmax(tokens, depth + 1, alpha, beta, true);
+            drop_back(&mut tokens[col]);
+            min_eval = std::cmp::min(min_eval, eval);
+            beta = std::cmp::min(beta, eval);
+            if beta <= alpha {
+                break;
+            }
+        }
+        min_eval
+    }
+}
+
+fn ai_move(tokens: &mut Vec<Vec<Token>>) {
+    let mut best_score: i32 = i32::MIN;
+    let mut best_col: usize = 0;
+
+    for col in possible_drops(tokens) {
+        drop_token(&mut tokens[col], false);
+        let score = minmax(tokens, 1, i32::MIN, i32::MAX, false);
+        drop_back(&mut tokens[col]);
+
+        if score > best_score {
+            best_score = score;
+            best_col = col;
+        }
+    }
+    drop_token(&mut tokens[best_col], false);
 }
 
 #[macroquad::main("MyGame")]
@@ -126,10 +218,13 @@ async fn main() {
                         wins.0 += 1;
                         ended = true;
                     } else {
-                        while !drop_token(&mut tokens[rand::gen_range(0, SIZE_X)], false) {}
+                        ai_move(&mut tokens);
                         if check_victory(&tokens, Owned::AI) {
                             println!("AI won!");
                             wins.1 += 1;
+                            ended = true;
+                        } else if possible_drops(&tokens).is_empty() {
+                            println!("Game ended in tie!");
                             ended = true;
                         }
                     }
