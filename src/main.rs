@@ -3,9 +3,16 @@ use macroquad::prelude::*;
 const SIZE_Y: usize = 6;
 const SIZE_X: usize = 7;
 
+#[derive(PartialEq)]
+enum Owned {
+    PLAYER,
+    AI,
+    NOBODY,
+}
+
 struct Token {
     pos: (f32, f32),
-    free: bool,
+    owned: Owned,
     color: Color,
 }
 
@@ -15,7 +22,7 @@ fn set_up_game(tokens: &mut Vec<Vec<Token>>) {
         for i in 0..SIZE_Y {
             let tmp: Token = Token {
                 pos: ((j * 100 + 80) as f32, (i * 100 + 180) as f32),
-                free: true,
+                owned: Owned::NOBODY,
                 color: BLACK,
             };
             tmp_tok.push(tmp);
@@ -25,20 +32,30 @@ fn set_up_game(tokens: &mut Vec<Vec<Token>>) {
 }
 
 fn drop_token(token_row: &mut Vec<Token>, player: bool) -> bool {
-    if token_row[0].free == false {
+    if token_row[0].owned != Owned::NOBODY {
         return false;
     }
     let mut pos: usize = 1;
-    while pos < SIZE_Y && token_row[pos].free {
+    while pos < SIZE_Y && token_row[pos].owned == Owned::NOBODY {
         pos += 1;
     }
-    token_row[pos - 1].free = false;
     if player {
+        token_row[pos - 1].owned = Owned::PLAYER;
         token_row[pos - 1].color = RED;
     } else {
+        token_row[pos - 1].owned = Owned::AI;
         token_row[pos - 1].color = YELLOW;
     }
     true
+}
+
+fn check_victory(tokens: &Vec<Vec<Token>>, owner: Owned) -> bool {
+    for column in tokens {
+        for tok in column {
+            if tok.owned == owner {}
+        }
+    }
+    false
 }
 
 #[macroquad::main("MyGame")]
@@ -50,7 +67,7 @@ async fn main() {
     request_new_screen_size(760.0, 760.0);
 
     loop {
-        rand::srand(t.elapsed().map(|d| d.as_millis()).unwrap_or(0) as u64);
+        rand::srand(t.elapsed().map(|d| d.as_micros()).unwrap_or(0) as u64);
         if is_key_pressed(KeyCode::Escape) {
             println!("Exiting game");
             return;
