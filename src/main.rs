@@ -116,7 +116,7 @@ fn eval(tokens: &Vec<Vec<Token>>) -> i32 {
     } else if check_victory(tokens, Owned::PLAYER) {
         -100
     } else if possible_drops(tokens).is_empty() {
-        -10
+        10
     } else {
         0
     }
@@ -126,7 +126,7 @@ fn minmax(tokens: &mut Vec<Vec<Token>>, depth: usize, alpha: i32, beta: i32, ai:
     match eval(tokens) {
         100 => return 100,
         -100 => return -100,
-        -10 => return -10,
+        10 => return 10,
         _ => {
             if depth >= AI_DEPTH {
                 return 0;
