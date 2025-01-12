@@ -2,7 +2,7 @@ use macroquad::prelude::*;
 
 const SIZE_Y: usize = 6;
 const SIZE_X: usize = 7;
-const AI_DEPTH: usize = 6;
+const AI_DEPTH: usize = 5;
 
 #[derive(PartialEq, Clone)]
 enum Owned {
@@ -38,27 +38,92 @@ fn drop_token(token_row: &mut Vec<Token>, player: bool) -> bool {
     if token_row[0].owned != Owned::NOBODY {
         return false;
     }
-    let mut pos: usize = 1;
-    while pos < SIZE_Y && token_row[pos].owned == Owned::NOBODY {
-        pos += 1;
-    }
-    if player {
-        token_row[pos - 1].owned = Owned::PLAYER;
-        token_row[pos - 1].color = RED;
-    } else {
-        token_row[pos - 1].owned = Owned::AI;
-        token_row[pos - 1].color = YELLOW;
-    }
+    let pos = token_row
+        .iter()
+        .rposition(|token| token.owned == Owned::NOBODY)
+        .unwrap();
+
+    token_row[pos].owned = if player { Owned::PLAYER } else { Owned::AI };
+    token_row[pos].color = if player { RED } else { YELLOW };
+
     true
 }
 
 fn drop_back(token_row: &mut Vec<Token>) {
-    let mut pos: usize = 0;
-    while token_row[pos].owned == Owned::NOBODY {
-        pos += 1;
+    if let Some(pos) = token_row
+        .iter()
+        .position(|token| token.owned != Owned::NOBODY)
+    {
+        token_row[pos].owned = Owned::NOBODY;
+        token_row[pos].color = BLACK;
     }
-    token_row[pos].owned = Owned::NOBODY;
-    token_row[pos].color = BLACK;
+}
+
+fn win_positions(tokens: &Vec<Vec<Token>>, owner: Owned) -> Vec<(f32, f32)> {
+    for y in 0..SIZE_Y {
+        for x in 0..SIZE_X {
+            if tokens[x][y].owned == owner {
+                if x + 3 < SIZE_X
+                    && tokens[x + 1][y].owned == owner
+                    && tokens[x + 2][y].owned == owner
+                    && tokens[x + 3][y].owned == owner
+                {
+                    let tmp: Vec<(f32, f32)> = vec![
+                        tokens[x][y].pos,
+                        tokens[x + 1][y].pos,
+                        tokens[x + 2][y].pos,
+                        tokens[x + 3][y].pos,
+                    ];
+                    return tmp;
+                }
+
+                if y + 3 < SIZE_Y
+                    && tokens[x][y + 1].owned == owner
+                    && tokens[x][y + 2].owned == owner
+                    && tokens[x][y + 3].owned == owner
+                {
+                    let tmp: Vec<(f32, f32)> = vec![
+                        tokens[x][y].pos,
+                        tokens[x][y + 1].pos,
+                        tokens[x][y + 2].pos,
+                        tokens[x][y + 3].pos,
+                    ];
+                    return tmp;
+                }
+
+                if x + 3 < SIZE_X
+                    && y + 3 < SIZE_Y
+                    && tokens[x + 1][y + 1].owned == owner
+                    && tokens[x + 2][y + 2].owned == owner
+                    && tokens[x + 3][y + 3].owned == owner
+                {
+                    let tmp: Vec<(f32, f32)> = vec![
+                        tokens[x][y].pos,
+                        tokens[x + 1][y + 1].pos,
+                        tokens[x + 2][y + 2].pos,
+                        tokens[x + 3][y + 3].pos,
+                    ];
+                    return tmp;
+                }
+
+                if x >= 3
+                    && y + 3 < SIZE_Y
+                    && tokens[x - 1][y + 1].owned == owner
+                    && tokens[x - 2][y + 2].owned == owner
+                    && tokens[x - 3][y + 3].owned == owner
+                {
+                    let tmp: Vec<(f32, f32)> = vec![
+                        tokens[x][y].pos,
+                        tokens[x - 1][y + 1].pos,
+                        tokens[x - 2][y + 2].pos,
+                        tokens[x - 3][y + 3].pos,
+                    ];
+                    return tmp;
+                }
+            }
+        }
+    }
+    vec![]
 }
 
 fn check_victory(tokens: &Vec<Vec<Token>>, owner: Owned) -> bool {
@@ -105,30 +170,34 @@ fn check_victory(tokens: &Vec<Vec<Token>>, owner: Owned) -> bool {
 }
 
 fn possible_drops(tokens: &Vec<Vec<Token>>) -> Vec<usize> {
-    (0..SIZE_X)
-        .filter(|&col| tokens[col][0].owned == Owned::NOBODY)
+    tokens
+        .iter()
+        .enumerate()
+        .filter(|(_, col)| col[0].owned == Owned::NOBODY)
+        .map(|(index, _)| index)
         .collect()
 }
 
-fn eval(tokens: &Vec<Vec<Token>>) -> i32 {
-    if check_victory(tokens, Owned::AI) {
-        100
+fn eval(tokens: &Vec<Vec<Token>>, depth: usize) -> i32 {
+    // Tries to find fastest win or slowest lost/tie
+    if possible_drops(tokens).is_empty() {
+        50 - depth as i32
+    } else if check_victory(tokens, Owned::AI) {
+        100 + depth as i32
     } else if check_victory(tokens, Owned::PLAYER) {
-        -100
-    } else if possible_drops(tokens).is_empty() {
-        10
+        -100 - depth as i32
     } else {
-        0
+        70
     }
 }
 
 fn minmax(tokens: &mut Vec<Vec<Token>>, depth: usize, alpha: i32, beta: i32, ai: bool) -> i32 {
-    match eval(tokens) {
-        100 => return 100,
-        -100 => return -100,
-        10 => return 10,
+    match eval(tokens, depth) {
+        score if score >= 100 => return score,
+        score if score <= -100 => return score,
+        score if score <= 50 => return score,
         _ => {
-            if depth >= AI_DEPTH {
+            if depth <= 0 {
                 return 0;
             }
         }
@@ -141,7 +210,7 @@ fn minmax(tokens: &mut Vec<Vec<Token>>, depth: usize, alpha: i32, beta: i32, ai:
         let mut max_eval = i32::MIN;
         for col in possible_drops(tokens) {
             drop_token(&mut tokens[col], false);
-            let eval = minmax(tokens, depth + 1, alpha, beta, false);
+            let eval = minmax(tokens, depth - 1, alpha, beta, false);
             drop_back(&mut tokens[col]);
             max_eval = std::cmp::max(max_eval, eval);
             alpha = std::cmp::max(alpha, eval);
@@ -154,7 +223,7 @@ fn minmax(tokens: &mut Vec<Vec<Token>>, depth: usize, alpha: i32, beta: i32, ai:
         let mut min_eval = i32::MAX;
         for col in possible_drops(tokens) {
             drop_token(&mut tokens[col], true);
-            let eval = minmax(tokens, depth + 1, alpha, beta, true);
+            let eval = minmax(tokens, depth - 1, alpha, beta, true);
             drop_back(&mut tokens[col]);
             min_eval = std::cmp::min(min_eval, eval);
             beta = std::cmp::min(beta, eval);
@@ -172,7 +241,7 @@ fn ai_move(tokens: &mut Vec<Vec<Token>>) {
 
     for col in possible_drops(tokens) {
         drop_token(&mut tokens[col], false);
-        let score = minmax(tokens, 1, i32::MIN, i32::MAX, false);
+        let score = minmax(tokens, AI_DEPTH, i32::MIN, i32::MAX, false);
         drop_back(&mut tokens[col]);
 
         if score > best_score {
@@ -185,7 +254,7 @@ fn ai_move(tokens: &mut Vec<Vec<Token>>) {
 
 #[macroquad::main("MyGame")]
 async fn main() {
-    let t: std::time::SystemTime = std::time::SystemTime::now();
+    let mut win_pos: Vec<(f32, f32)> = Vec::new();
     let mut wins: (u32, u32) = (0, 0);
     let mut ended: bool = false;
     let mut tokens: Vec<Vec<Token>> = Vec::new();
@@ -208,21 +277,23 @@ async fn main() {
                 println!("Starting new game!");
                 set_up_game(&mut tokens);
                 ended = false;
+                win_pos = vec![];
             }
         } else {
-            rand::srand(t.elapsed().map(|d| d.as_micros()).unwrap_or(0) as u64);
             if is_key_pressed(KeyCode::Enter) {
                 if drop_token(&mut tokens[drop_pos], true) {
                     if check_victory(&tokens, Owned::PLAYER) {
                         println!("You won!");
                         wins.0 += 1;
                         ended = true;
+                        win_pos = win_positions(&tokens, Owned::PLAYER);
                     } else {
                         ai_move(&mut tokens);
                         if check_victory(&tokens, Owned::AI) {
                             println!("AI won!");
                             wins.1 += 1;
                             ended = true;
+                            win_pos = win_positions(&tokens, Owned::AI);
                         } else if possible_drops(&tokens).is_empty() {
                             println!("Game ended in tie!");
                             ended = true;
@@ -246,6 +317,9 @@ async fn main() {
             for tok in line {
                 draw_circle(tok.pos.0, tok.pos.1, 45.0, tok.color);
             }
+        }
+        for x in &win_pos {
+            draw_circle(x.0, x.1, 10.0, BLUE);
         }
         next_frame().await
     }
