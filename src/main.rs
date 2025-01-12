@@ -68,12 +68,7 @@ fn win_positions(tokens: &Vec<Vec<Token>>, owner: Owned) -> Vec<(f32, f32)> {
                     && tokens[x + 2][y].owned == owner
                     && tokens[x + 3][y].owned == owner
                 {
-                    let tmp: Vec<(f32, f32)> = vec![
-                        tokens[x][y].pos,
-                        tokens[x + 1][y].pos,
-                        tokens[x + 2][y].pos,
-                        tokens[x + 3][y].pos,
-                    ];
+                    let tmp: Vec<(f32, f32)> = vec![tokens[x][y].pos, tokens[x + 3][y].pos];
                     return tmp;
                 }
 
@@ -82,12 +77,7 @@ fn win_positions(tokens: &Vec<Vec<Token>>, owner: Owned) -> Vec<(f32, f32)> {
                     && tokens[x][y + 2].owned == owner
                     && tokens[x][y + 3].owned == owner
                 {
-                    let tmp: Vec<(f32, f32)> = vec![
-                        tokens[x][y].pos,
-                        tokens[x][y + 1].pos,
-                        tokens[x][y + 2].pos,
-                        tokens[x][y + 3].pos,
-                    ];
+                    let tmp: Vec<(f32, f32)> = vec![tokens[x][y].pos, tokens[x][y + 3].pos];
                     return tmp;
                 }
 
@@ -97,12 +87,7 @@ fn win_positions(tokens: &Vec<Vec<Token>>, owner: Owned) -> Vec<(f32, f32)> {
                     && tokens[x + 2][y + 2].owned == owner
                     && tokens[x + 3][y + 3].owned == owner
                 {
-                    let tmp: Vec<(f32, f32)> = vec![
-                        tokens[x][y].pos,
-                        tokens[x + 1][y + 1].pos,
-                        tokens[x + 2][y + 2].pos,
-                        tokens[x + 3][y + 3].pos,
-                    ];
+                    let tmp: Vec<(f32, f32)> = vec![tokens[x][y].pos, tokens[x + 3][y + 3].pos];
                     return tmp;
                 }
 
@@ -112,12 +97,7 @@ fn win_positions(tokens: &Vec<Vec<Token>>, owner: Owned) -> Vec<(f32, f32)> {
                     && tokens[x - 2][y + 2].owned == owner
                     && tokens[x - 3][y + 3].owned == owner
                 {
-                    let tmp: Vec<(f32, f32)> = vec![
-                        tokens[x][y].pos,
-                        tokens[x - 1][y + 1].pos,
-                        tokens[x - 2][y + 2].pos,
-                        tokens[x - 3][y + 3].pos,
-                    ];
+                    let tmp: Vec<(f32, f32)> = vec![tokens[x][y].pos, tokens[x - 3][y + 3].pos];
                     return tmp;
                 }
             }
@@ -255,7 +235,7 @@ fn ai_move(tokens: &mut Vec<Vec<Token>>) {
 #[macroquad::main("MyGame")]
 async fn main() {
     let mut win_pos: Vec<(f32, f32)> = Vec::new();
-    let mut wins: (u32, u32) = (0, 0);
+    let mut wins: (u32, u32, u32) = (0, 0, 0);
     let mut ended: bool = false;
     let mut tokens: Vec<Vec<Token>> = Vec::new();
     let mut drop_pos: usize = 3;
@@ -268,8 +248,8 @@ async fn main() {
             return;
         } else if is_key_pressed(KeyCode::Space) {
             println!(
-                "Player has won {} games and AI has won {} games",
-                wins.0, wins.1
+                "Player has won {} games and AI has won {} games. {} games have ended in tie.",
+                wins.0, wins.1, wins.2
             );
         }
         if ended {
@@ -297,6 +277,7 @@ async fn main() {
                         } else if possible_drops(&tokens).is_empty() {
                             println!("Game ended in tie!");
                             ended = true;
+                            wins.2 += 1;
                         }
                     }
                 } else {
@@ -318,8 +299,15 @@ async fn main() {
                 draw_circle(tok.pos.0, tok.pos.1, 45.0, tok.color);
             }
         }
-        for x in &win_pos {
-            draw_circle(x.0, x.1, 10.0, BLUE);
+        if !win_pos.is_empty() {
+            draw_line(
+                win_pos[0].0,
+                win_pos[0].1,
+                win_pos[1].0,
+                win_pos[1].1,
+                10.0,
+                DARKBLUE,
+            );
         }
         next_frame().await
     }
