@@ -2,7 +2,7 @@ use macroquad::prelude::*;
 
 const SIZE_Y: usize = 6;
 const SIZE_X: usize = 7;
-const AI_DEPTH: usize = 5;
+const AI_DEPTH: usize = 6;
 
 #[derive(PartialEq, Clone)]
 enum Owned {
